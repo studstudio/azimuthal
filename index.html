@@ -1,347 +1,348 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-
-  <meta
-    name="viewport"
-    content="width=device-width,
-             initial-scale=1,
-             maximum-scale=1,
-             user-scalable=no,
-             viewport-fit=cover"
-  >
-
-  <meta name="theme-color" content="#d8c7a5">
-
-  <title>Azimuthal Map</title>
-
-  <style>
-    * {
-      box-sizing: border-box;
-      -webkit-tap-highlight-color: transparent;
-    }
-
-    html,
-    body {
-      margin: 0;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background: #d8c7a5;
-      font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue",
-                   Helvetica, Arial, sans-serif;
-    }
-
-    #map {
-      position: fixed;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      touch-action: none;
-      background:
-        radial-gradient(
-          circle at 50% 48%,
-          #e5d7b9 0%,
-          #d8c7a5 55%,
-          #c9b58c 100%
-        );
-    }
-
-    svg {
-      width: 100%;
-      height: 100%;
-      display: block;
-    }
-
-    /* Ocean */
-
-    .ocean {
-      fill: #d7c6a3;
-    }
-
-    /* Land base */
-
-    .land {
-      fill: #cbb78d;
-      stroke: #9f8b68;
-      stroke-width: 0.45;
-      vector-effect: non-scaling-stroke;
-    }
-
-    /* Slightly lighter terrain regions */
-
-    .terrain-light {
-      fill: #d8c69d;
-      opacity: 0.72;
-    }
-
-    .terrain-mid {
-      fill: #bba477;
-      opacity: 0.42;
-    }
-
-    .terrain-dark {
-      fill: #917c59;
-      opacity: 0.27;
-    }
-
-    /* Lakes */
-
-    .lake {
-      fill: #8299a0;
-      opacity: 0.88;
-      stroke: #667f86;
-      stroke-width: 0.45;
-      vector-effect: non-scaling-stroke;
-    }
-
-    /* Rivers */
-
-    .river {
-      fill: none;
-      stroke: #708b91;
-      stroke-width: 0.7;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-      opacity: 0.82;
-      vector-effect: non-scaling-stroke;
-    }
-
-    .river-major {
-      stroke-width: 1.05;
-      opacity: 0.9;
-    }
-
-    /* Coast */
-
-    .coast {
-      fill: none;
-      stroke: #806e51;
-      stroke-width: 0.65;
-      vector-effect: non-scaling-stroke;
-    }
-
-    /* Graticule */
-
-    .graticule {
-      fill: none;
-      stroke: #8f8065;
-      stroke-width: 0.35;
-      opacity: 0.22;
-      vector-effect: non-scaling-stroke;
-    }
-
-    /* Outer edge of projection */
-
-    .projection-boundary {
-      fill: none;
-      stroke: #8c7857;
-      stroke-width: 1;
-      opacity: 0.55;
-      vector-effect: non-scaling-stroke;
-    }
-
-    /* Subtle map grain */
-
-    .grain {
-      pointer-events: none;
-      opacity: 0.10;
-      mix-blend-mode: multiply;
-    }
-
-    /* Top UI */
-
-    #hud {
-      position: fixed;
-      top: env(safe-area-inset-top, 0px);
-      left: 0;
-      right: 0;
-      padding: 14px 16px 0 16px;
-      pointer-events: none;
-    }
-
-    #title {
-      display: inline-block;
-      padding: 8px 11px;
-      border-radius: 9px;
-
-      background: rgba(237, 225, 196, 0.72);
-      border: 1px solid rgba(92, 76, 51, 0.18);
-
-      color: #51442e;
-      font-size: 12px;
-      font-weight: 600;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-    }
-
-    /* Bottom controls */
-
-    #controls {
-      position: fixed;
-      right: 14px;
-      bottom: calc(14px + env(safe-area-inset-bottom, 0px));
-
-      display: flex;
-      flex-direction: column;
-      gap: 7px;
-    }
-
-    button {
-      width: 42px;
-      height: 42px;
-
-      border: 1px solid rgba(73, 59, 38, 0.25);
-      border-radius: 11px;
-
-      background: rgba(229, 214, 179, 0.82);
-      color: #51442e;
-
-      font-size: 20px;
-      line-height: 1;
-
-      box-shadow:
-        0 2px 8px rgba(60, 45, 25, 0.12);
-
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-    }
-
-    button:active {
-      transform: scale(0.94);
-      background: rgba(207, 191, 153, 0.9);
-    }
-
-    #coordinates {
-      position: fixed;
-      left: 14px;
-      bottom: calc(14px + env(safe-area-inset-bottom, 0px));
-
-      padding: 7px 10px;
-
-      border-radius: 8px;
-      background: rgba(229, 214, 179, 0.72);
-      border: 1px solid rgba(73, 59, 38, 0.18);
-
-      color: #62523a;
-      font-size: 10px;
-      font-variant-numeric: tabular-nums;
-
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-    }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>Azimuthal Equidistant Terrain — WebGL2</title>
+<style>
+  :root { --paper:#d8c7a7; --ink:#3d3428; --water:#9eb7b0; --river:#587d78; }
+  html,body { margin:0; width:100%; height:100%; overflow:hidden; background:var(--paper); color:var(--ink);
+    font-family: ui-monospace,SFMono-Regular,Menlo,monospace; }
+  #map { position:fixed; inset:0; touch-action:none; }
+  canvas,svg { position:absolute; inset:0; width:100%; height:100%; display:block; }
+  #terrain { z-index:0; }
+  #vectors { z-index:1; pointer-events:none; }
+  #hud { position:fixed; z-index:3; left:12px; top:12px; padding:9px 11px; border:1px solid rgba(61,52,40,.28);
+    background:rgba(226,211,181,.82); backdrop-filter:blur(5px); border-radius:9px; font-size:11px; line-height:1.45;
+    box-shadow:0 2px 14px rgba(60,45,25,.12); }
+  #hud b { font-weight:700; }
+  #status { opacity:.75; }
+  .credit { position:fixed; z-index:3; right:10px; bottom:8px; font-size:9px; opacity:.65; }
+</style>
 </head>
-
 <body>
-
-<div id="map"></div>
-
+<div id="map">
+  <canvas id="terrain"></canvas>
+  <svg id="vectors" aria-hidden="true"></svg>
+</div>
 <div id="hud">
-  <div id="title">AZIMUTHAL EQUidISTANT</div>
+  <div><b>AZIMUTHAL EQUIDISTANT · WEBGL2</b></div>
+  <div id="status">loading terrain…</div>
+  <div id="coord">center 0.000°, 0.000°</div>
 </div>
+<div class="credit">Terrain: AWS Open Data Terrarium · Vectors: Natural Earth</div>
 
-<div id="coordinates">
-  0.000° N &nbsp; 0.000° E
-</div>
-
-<div id="controls">
-  <button id="zoomIn" aria-label="Zoom in">+</button>
-  <button id="zoomOut" aria-label="Zoom out">−</button>
-  <button id="reset" aria-label="Reset map">⌾</button>
-</div>
-
-
-<!-- D3 -->
 <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
-
-<!-- World geographic data -->
-<script src="https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.js"></script>
-
-
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
+<script src="https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.js"></script>
 <script>
-
 (() => {
+  "use strict";
 
-  /*
-   * ------------------------------------------------------------
-   * MAP SETUP
-   * ------------------------------------------------------------
-   */
+  const TERRARIUM = z => `https://elevation-tiles-prod.s3.amazonaws.com/terrarium/${z}/{x}/{y}.png`;
+  const LAKES = "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_lakes.geojson";
+  const RIVERS = "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_rivers_lake_centerlines_scale_rank.geojson";
 
-  const container = document.getElementById("map");
+  const terrain = document.getElementById("terrain");
+  const gl = terrain.getContext("webgl2", {
+    alpha:false, antialias:false, depth:false, stencil:false,
+    premultipliedAlpha:false, preserveDrawingBuffer:false,
+    powerPreference:"high-performance"
+  });
+  const statusEl = document.getElementById("status");
+  const coordEl = document.getElementById("coord");
+  if (!gl) {
+    statusEl.textContent = "WebGL2 unavailable — use a modern Safari/Chrome.";
+    return;
+  }
 
-  const svg = d3.select(container)
-    .append("svg")
-    .attr("width", "100%")
-    .attr("height", "100%")
-    .attr("preserveAspectRatio", "xMidYMid meet");
+  const DPR = Math.min(devicePixelRatio || 1, 2);
+  const state = {
+    center:[0,0], zoom:1,
+    width:0,height:0,
+    // Global Web-Mercator terrain atlas at z=3: 8×8 tiles = 2048².
+    z:3, tileSize:256, tilesPerSide:8,
+    atlas:null, atlasReady:false,
+    dragging:false, lastX:0,lastY:0,
+    pinch:false, pinchStartDist:0, pinchStartZoom:1, pinchStartCenter:[0,0],
+    renderQueued:false
+  };
 
-  const defs = svg.append("defs");
+  function resize() {
+    state.width = innerWidth; state.height = innerHeight;
+    terrain.width = Math.max(1, Math.floor(innerWidth*DPR));
+    terrain.height = Math.max(1, Math.floor(innerHeight*DPR));
+    gl.viewport(0,0,terrain.width,terrain.height);
+    scheduleRender();
+    renderVectors();
+  }
+  addEventListener("resize", resize, {passive:true});
 
-  /*
-   * Subtle paper / terrain texture.
-   */
+  // ----- WebGL2 shader pipeline -----
+  const vs = `#version 300 es
+  precision highp float;
+  const vec2 POS[4] = vec2[4](
+    vec2(-1.,-1.), vec2(1.,-1.), vec2(-1.,1.), vec2(1.,1.)
+  );
+  out vec2 vUv;
+  void main(){
+    vec2 p=POS[gl_VertexID];
+    vUv=p*.5+.5;
+    gl_Position=vec4(p,0.,1.);
+  }`;
 
-  const filter = defs.append("filter")
-    .attr("id", "terrainNoise");
+  const fs = `#version 300 es
+  precision highp float;
+  uniform sampler2D uTerrain;
+  uniform vec2 uResolution;
+  uniform vec2 uCenterLonLat;
+  uniform float uZoom;
+  uniform float uAspect;
+  uniform float uAtlasSize;
+  uniform float uRadius;
+  out vec4 outColor;
+  const float PI=3.14159265358979323846;
+  const vec3 PAPER=vec3(0.72,0.64,0.51);
 
-  filter.append("feTurbulence")
-    .attr("type", "fractalNoise")
-    .attr("baseFrequency", "0.018")
-    .attr("numOctaves", 3)
-    .attr("seed", 8)
-    .attr("result", "noise");
+  float terrarium(vec2 uv){
+    vec4 c=texture(uTerrain,uv);
+    return (c.r*256.0+c.g+c.b/256.0)-32768.0;
+  }
 
-  filter.append("feColorMatrix")
-    .attr("type", "saturate")
-    .attr("values", 0);
+  vec2 lonLatToMerc(vec2 ll){
+    float lon=ll.x*PI/180.0;
+    float lat=clamp(ll.y,-85.05112878,85.05112878)*PI/180.0;
+    return vec2(lon/(2.0*PI)+0.5, (1.0-log(tan(PI*0.25+lat*0.5)/ (1.0)) / PI)*0.5);
+  }
 
-  filter.append("feComponentTransfer")
-    .append("feFuncA")
-    .attr("type", "table")
-    .attr("tableValues", "0 0.17");
+  vec2 inverseAE(vec2 xy){
+    // xy is normalized spherical distance from projection center.
+    float rho=length(xy);
+    if(rho<1e-7) return uCenterLonLat;
+    float c=rho;
+    float phi1=uCenterLonLat.y*PI/180.0;
+    float lam1=uCenterLonLat.x*PI/180.0;
+    float lat=asin(clamp(cos(c)*sin(phi1)+(xy.y*sin(c)*cos(phi1)/rho),-1.0,1.0));
+    float lon=lam1+atan(xy.x*sin(c),rho*cos(phi1)*cos(c)-xy.y*sin(phi1)*sin(c));
+    return vec2(lon*180.0/PI,lat*180.0/PI);
+  }
 
-  /*
-   * Map group.
-   *
-   * Everything inside this group is transformed together.
-   */
+  void main(){
+    vec2 p=gl_FragCoord.xy/uResolution;
+    vec2 xy=(p-vec2(.5))*vec2(2.0*uAspect,2.0);
+    // uZoom controls angular radius per screen height.
+    xy/=uZoom;
+    float rho=length(xy);
+    if(rho>PI){ outColor=vec4(PAPER,1.); return; }
 
-  const mapGroup = svg.append("g")
-    .attr("class", "map-group");
+    vec2 ll=inverseAE(xy);
+    float lon=ll.x;
+    // wrap longitude
+    lon=mod(lon+540.0,360.0)-180.0;
+    vec2 muv=lonLatToMerc(vec2(lon,ll.y));
+    if(muv.y<0.0||muv.y>1.0){ outColor=vec4(PAPER,1.); return; }
 
+    float h=terrarium(muv);
+    // Approximate meters/pixel in the global atlas for a stable hillshade.
+    vec2 du=vec2(1.0/uAtlasSize,0.0);
+    vec2 dv=vec2(0.0,1.0/uAtlasSize);
+    float hx=terrarium(muv+du)-terrarium(muv-du);
+    float hy=terrarium(muv+dv)-terrarium(muv-dv);
+    float slope=sqrt(hx*hx+hy*hy)*0.035;
+    float shade=clamp(0.58 + (-0.55*hx-0.8*hy)*0.025,0.0,1.0);
+    // Beige paper palette with subtle elevation response.
+    float relief=clamp(h/3500.0,-1.0,1.0);
+    vec3 low=vec3(0.70,0.62,0.48);
+    vec3 mid=vec3(0.78,0.70,0.56);
+    vec3 high=vec3(0.88,0.82,0.69);
+    vec3 col=mix(mid,low,clamp(-relief,0.0,1.0));
+    col=mix(col,high,clamp(relief,0.0,1.0));
+    col*=mix(0.88,1.08,shade);
+    col-=slope*0.018;
 
-  /*
-   * ------------------------------------------------------------
-   * PROJECTION
-   * ------------------------------------------------------------
-   *
-   * Azimuthal Equidistant:
-   *
-   *   - distances from center are preserved
-   *   - bearings from center are preserved
-   *   - ideal for plotting tracks radiating from a central point
-   */
+    // Very subtle procedural paper grain, generated per-pixel on GPU.
+    float n=fract(sin(dot(gl_FragCoord.xy,vec2(12.9898,78.233)))*43758.5453);
+    col += (n-0.5)*0.018;
+    // Vignette.
+    col*=1.0-0.10*clamp(pow(rho/PI,2.0),0.0,1.0);
+    outColor=vec4(col,1.0);
+  }`;
 
-  const projection = d3.geoAzimuthalEquidistant()
-    .rotate([0, 0])
-    .center([0, 0])
-    .translate([0, 0])
-    .scale(100);
+  function compile(type,src){
+    const s=gl.createShader(type); gl.shaderSource(s,src); gl.compileShader(s);
+    if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+    return s;
+  }
+  const program=gl.createProgram();
+  gl.attachShader(program,compile(gl.VERTEX_SHADER,vs));
+  gl.attachShader(program,compile(gl.FRAGMENT_SHADER,fs));
+  gl.linkProgram(program);
+  if(!gl.getProgramParameter(program,gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(program));
 
-  const path = d3.geoPath(projection);
+  const loc = {
+    terrain:gl.getUniformLocation(program,"uTerrain"),
+    resolution:gl.getUniformLocation(program,"uResolution"),
+    center:gl.getUniformLocation(program,"uCenterLonLat"),
+    zoom:gl.getUniformLocation(program,"uZoom"),
+    aspect:gl.getUniformLocation(program,"uAspect"),
+    atlasSize:gl.getUniformLocation(program,"uAtlasSize")
+  };
 
+  function scheduleRender(){
+    if(state.renderQueued) return;
+    state.renderQueued=true;
+    requestAnimationFrame(()=>{state.renderQueued=false; renderTerrain();});
+  }
 
-  /*
-   * Current view transform.
-   */
+  function renderTerrain(){
+    gl.useProgram(program);
+    gl.viewport(0,0,terrain.width,terrain.height);
+    gl.clearColor(0.72,0.64,0.51,1); gl.clear(gl.COLOR_BUFFER_BIT);
+    if(!state.atlasReady) return;
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,state.atlas);
+    gl.uniform1i(loc.terrain,0);
+    gl.uniform2f(loc.resolution,terrain.width,terrain.height);
+    gl.uniform2f(loc.center,state.center[0],state.center[1]);
+    gl.uniform1f(loc.zoom,state.zoom);
+    gl.uniform1f(loc.aspect,state.width/state.height);
+    gl.uniform1f(loc.atlasSize,state.tilesPerSide*state.tileSize);
+    gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+  }
 
-  let zoomTransform = d3.zoomIdentity;
+  // ----- Global z=3 Mercator atlas loader -----
+  async function loadAtlas(){
+    const N=state.tilesPerSide, S=state.tileSize;
+    const canvas=document.createElement("canvas");
+    canvas.width=N*S; canvas.height=N*S;
+    const ctx=canvas.getContext("2d",{willReadFrequently:false});
+    const jobs=[];
+    for(let y=0;y<N;y++) for(let x=0;x<N;x++){
+      jobs.push(new Promise(resolve=>{
+        const img=new Image();
+        img.crossOrigin="anonymous";
+        img.onload=()=>{ ctx.drawImage(img,x*S,y*S,S,S); resolve(true); };
+        img.onerror=()=>resolve(false);
+        img.src=TERRARIUM(state.z).replace("{x}",x).replace("{y}",y);
+      }));
+    }
+    const results=await Promise.all(jobs);
+    const ok=results.filter(Boolean).length;
+    statusEl.textContent=`terrain atlas ${ok}/${N*N} tiles · GPU shading`;
+    if(ok < N*N*0.7) {
+      statusEl.textContent=`terrain partial ${ok}/${N*N} · retry if needed`;
+    }
+    const tex=gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D,tex);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
+    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,canvas);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+    state.atlas=tex; state.atlasReady=true; scheduleRender();
+  }
 
+  // ----- D3 vector overlay / exact geographic projection -----
+  const svg=d3.select("#vectors");
+  const g=svg.append("g");
+  let projection=d3.geoAzimuthalEquidistant().center(state.center).translate([innerWidth/2,innerHeight/2]).scale(170*state.zoom);
+  const path=d3.geoPath(projection);
 
-  /*
+  function renderVectors(){
+    projection.center(state.center).translate([state.width/2,state.height/2]).scale(170*state.zoom);
+    svg.attr("viewBox",`0 0 ${state.width} ${state.height}`);
+    if(!window.__countriesLoaded) {
+      try {
+        const world=topojson.feature(worldAtlas,worldAtlas.objects.countries);
+        g.selectAll(".country").data(world.features).join("path")
+          .attr("class","country").attr("d",path)
+          .attr("fill","none").attr("stroke","rgba(63,53,41,.38)").attr("stroke-width",0.55)
+          .attr("vector-effect","non-scaling-stroke");
+        window.__countriesLoaded=true;
+      } catch(e) {}
+    } else {
+      g.selectAll(".country").attr("d",path);
+    }
+    if(window.__lakes) g.selectAll(".lake").data(window.__lakes.features).join("path")
+      .attr("class","lake").attr("d",path).attr("fill","rgba(115,145,139,.34)")
+      .attr("stroke","rgba(69,102,96,.38)").attr("stroke-width",0.55).attr("vector-effect","non-scaling-stroke");
+    if(window.__rivers) g.selectAll(".river").data(window.__rivers.features).join("path")
+      .attr("class","river").attr("d",path).attr("fill","none").attr("stroke","rgba(60,104,99,.55)")
+      .attr("stroke-width",0.7).attr("vector-effect","non-scaling-stroke");
+  }
+
+  async function loadVectors(){
+    try {
+      const [lakes,rivers]=await Promise.all([fetch(LAKES).then(r=>r.json()),fetch(RIVERS).then(r=>r.json())]);
+      window.__lakes=lakes; window.__rivers=rivers; renderVectors();
+    } catch(e) {
+      console.warn("vector load failed",e);
+      statusEl.textContent += " · vector data unavailable";
+    }
+  }
+
+  // ----- Mobile interaction -----
+  const map=document.getElementById("map");
+  function setCenterFromScreen(x,y,oldCenter=state.center){
+    const p=[x,y], cx=state.width/2, cy=state.height/2;
+    const dx=(p[0]-cx)/170/state.zoom, dy=(cy-p[1])/170/state.zoom;
+    const inv=projection.invert([cx+dx*170*state.zoom,cy-dy*170*state.zoom]);
+    if(inv && Number.isFinite(inv[0])) {
+      state.center=[oldCenter[0]-(inv[0]-oldCenter[0]), oldCenter[1]-(inv[1]-oldCenter[1])];
+      state.center[0]=((state.center[0]+540)%360)-180;
+      state.center[1]=Math.max(-89,Math.min(89,state.center[1]));
+    }
+  }
+
+  map.addEventListener("pointerdown",e=>{
+    map.setPointerCapture(e.pointerId);
+    state.dragging=true; state.lastX=e.clientX; state.lastY=e.clientY;
+  });
+  map.addEventListener("pointermove",e=>{
+    if(!state.dragging) return;
+    const dx=e.clientX-state.lastX, dy=e.clientY-state.lastY;
+    state.lastX=e.clientX; state.lastY=e.clientY;
+    state.center[0]-=dx/(170*state.zoom)*57.2958;
+    state.center[1]+=dy/(170*state.zoom)*57.2958;
+    state.center[0]=((state.center[0]+540)%360)-180;
+    state.center[1]=Math.max(-89,Math.min(89,state.center[1]));
+    scheduleRender(); renderVectors(); updateCoord();
+  });
+  map.addEventListener("pointerup",()=>state.dragging=false);
+  map.addEventListener("pointercancel",()=>state.dragging=false);
+  map.addEventListener("wheel",e=>{
+    e.preventDefault();
+    state.zoom=Math.max(0.35,Math.min(8,state.zoom*Math.exp(-e.deltaY*0.0015)));
+    scheduleRender(); renderVectors();
+  },{passive:false});
+
+  let touches=new Map();
+  map.addEventListener("touchstart",e=>{
+    for(const t of e.changedTouches) touches.set(t.identifier,{x:t.clientX,y:t.clientY});
+    if(touches.size===2){
+      const a=[...touches.values()]; state.pinch=true;
+      state.pinchStartDist=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);
+      state.pinchStartZoom=state.zoom;
+      state.pinchStartCenter=[...state.center];
+    }
+  },{passive:true});
+  map.addEventListener("touchmove",e=>{
+    if(touches.size!==2) return;
+    for(const t of e.changedTouches) if(touches.has(t.identifier)) touches.set(t.identifier,{x:t.clientX,y:t.clientY});
+    const a=[...touches.values()];
+    const d=Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);
+    state.zoom=Math.max(0.35,Math.min(8,state.pinchStartZoom*d/state.pinchStartDist));
+    scheduleRender(); renderVectors();
+  },{passive:true});
+  map.addEventListener("touchend",e=>{for(const t of e.changedTouches) touches.delete(t.identifier); if(touches.size<2)state.pinch=false;},{passive:true});
+
+  function updateCoord(){ coordEl.textContent=`center ${state.center[0].toFixed(3)}°, ${state.center[1].toFixed(3)}° · z ${state.zoom.toFixed(2)}`; }
+  setInterval(updateCoord,100);
+
+  resize();
+  loadAtlas().catch(e=>{console.error(e); statusEl.textContent="terrain load failed";});
+  loadVectors();
+})();
+</script>
+</body>
+</html>
