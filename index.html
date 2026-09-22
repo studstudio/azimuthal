@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Sync Map - Azimuthal Equidistant</title>
+    <!-- Load D3.js and TopoJSON client libraries -->
+    <script src="https://d3js.org"></script>
+    <script src="https://unpkg.com"></script>
+    <style>
+        body {
+            margin: 0;
+            background-color: #fcf8f2; /* Soft linen base */
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+        }
+
+        #map-container {
+            width: 100vw;
+            height: 100vh;
+            cursor: grab;
+        }
+
+        #map-container:active {
+            cursor: grabbing;
+        }
+
+        /* Topographic Color Palette Rules */
+        .ocean {
+            fill: #e8ded1; /* Muted beige-grey water */
+        }
+
+        .graticule {
+            fill: none;
+            stroke: #dfd0be;
+            stroke-width: 0.5px;
+            stroke-opacity: 0.7;
+        }
+
+        .land-low {
+            fill: #f5ece1; /* Light sand plain */
+            stroke: #dfd3c3;
+            stroke-width: 0.5px;
+        }
+
+        .river {
+            fill: none;
+            stroke: #d0c2b0; /* Deeper beige-grey lines for river beds */
+            stroke-width: 0.75px;
+        }
+
+        .lake {
+            fill: #e8ded1;
+            stroke: #d0c2b0;
+            stroke-width: 0.5px;
+        }
+
+        /* Live Data Layer Styles */
+        .send-point {
+            fill: #4AF626;
+            filter: drop-shadow(0px 0px 4px rgba(74, 246, 38, 0.6));
+        }
+
+        .pull-square {
+            fill: #3ce01b;
+            filter: drop-shadow(0px 0px 4px rgba(74, 246, 38, 0.6));
+        }
+
+        .sync-line {
+            fill: none;
+            stroke: #4AF626;
+            stroke-linecap: round;
+            opacity: 0.85;
+            filter: drop-shadow(0px 0px 2px rgba(74, 246, 38, 0.4));
+        }
+
+        .self-sync-outline {
+            fill: none;
+            stroke: #4AF626;
+            stroke-width: 1.5px;
+        }
+
+        .self-sync-center {
+            fill: #4AF626;
+        }
+
+        /* Simple Dashboard Overlay UI */
+        #dashboard-ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(252, 248, 242, 0.9);
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            border: 1px solid #dfd3c3;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        h1 {
+            margin: 0 0 5px 0;
+            font-size: 16px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #5c4d3c;
+        }
+
+        .subtitle {
+            font-size: 12px;
+            color: #8c7b69;
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="dashboard-ui">
+        <h1>Global Latency Vector Map</h1>
+        <p class="subtitle">Azimuthal Equidistant Projection • 1 Dash = 15 Mins</p>
+    </div>
+
+    <svg id="map-container"></svg>
+
+    <script>
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+
+        const svg = d3.select("#map-container")
+            .attr("width", width)
+            .attr("height", height);
+
+        // Group container that handles panning and zooming transforms safely
+        const mainGroup = svg.append("g");
+
+        // 1. CONFIGURE AZIMUTHAL EQUIDISTANT PROJECTION
+        // Center it around your primary hub or server (e.g., [Longitude, Latitude])
+        const centerCoordinates =; // Centered near the prime meridian core
+        const projection = d3.geoAzimuthalEquidistant()
+            .scale(150)
+            .translate([width / 2, height / 2])
+            .center(centerCoordinates)
+            .clipAngle(180 - 1e-3); // Render globe coordinates smoothly
+
+        const pathGenerator = d3.geoPath().projection(projection);
+
+        // Render circular background ocean bounds
+        mainGroup.append("path")
+            .datum({type: "Sphere"})
+            .attr("class", "ocean")
+            .attr("d", pathGenerator);
+
+        // Add a coordinate graticule grid
+        mainGroup.append("path")
+            .datum(d3.geoGraticule())
+            .attr("class", "graticule")
+            .attr("d", pathGenerator);
+
+        // 2. LOAD ATLAS TOPOGRAPHY (Using unpkg production mirrors)
+        Promise.all([
+            d3.json("https://unpkg.com"),
+            // Fallback vectors used to structure geography basemaps smoothly
+        ]).then(([worldData]) => {
+            
+            // Draw land masses
+            mainGroup.append("g")
+                .selectAll("path")
+                .data(topojson.feature(worldData, worldData.objects.land).features)
+                .enter().append("path")
+                .attr("class", "land-low")
+                .attr("d", pathGenerator);
+
+            // 3. SAMPLE INCOMING LIVE TRANSIT SIMULATION DATA PAYLOAD
+            const activeSyncs = [
+                { id: 1, type: "transit", from: [-87.62, 41.87], to: [-0.12, 51.50], mins: 135 },  // Chicago -> London
+                { id: 2, type: "transit", from: [139.69, 35.67], to: [121.56, 25.03], mins: 45 },   // Tokyo -> Taipei
+                { id: 3, type: "transit", from: [12.49, 41.90], to: [37.61, 55.75], mins: 480 },   // Rome -> Moscow
+                { id: 4, type: "self", coords: [-122.41, 37.77] }                                  // SF -> Self Sync
+            ];
+
+            renderDataLayers(activeSyncs);
+        });
+
+        // 4. RENDERING & DATA LAYER CONTROLLER
+        function renderDataLayers(data) {
+            data.forEach(d => {
+                if (d.type === "self") {
+                    // Render "Self-Sync" Symbol (Circle inside hollow Square Outline)
+                    const screenPos = projection(d.coords);
+                    if (!screenPos) return;
+
+                    const markerGroup = mainGroup.append("g")
+                        .attr("class", "self-sync-marker")
+                        .datum(d) // Bind data for accurate re-positioning on zoom
+                        .attr("transform", `translate(${screenPos[0]}, ${screenPos[1]})`);
+
+                    markerGroup.append("rect")
+                        .attr("class", "self-sync-outline")
+                        .attr("width", 12)
+                        .attr("height", 12)
+                        .attr("x", -6)
+                        .attr("y", -6);
+
+                    markerGroup.append("circle")
+                        .attr("class", "self-sync-center")
+                        .attr("r", 3);
+
+                } else {
+                    // Calculate great circle geodesic path line between coordinate pairs
+                    const geoLine = {
+                        type: "LineString",
+                        coordinates: [d.from, d.to]
+                    };
+
+                    // Draw the transit line path
+                    const path = mainGroup.append("path")
+                        .datum(geoLine)
+                        .attr("class", "sync-line")
+                        .attr("d", pathGenerator);
+
+                    // Compute dynamic segment dashboard styling (1 segment per 15 minutes)
+                    if (path.node()) {
+                        const totalLength = path.node().getTotalLength();
+                        const segmentsCount = Math.max(1, Math.floor(d.mins / 15));
+                        const chunk = totalLength / segmentsCount;
+                        const dash = chunk * 0.75;
+                        const gap = chunk * 0.25;
+                        path.style("stroke-dasharray", `${dash}, ${gap}`);
+                    }
+
+                    // Render source green circle
+                    const sourcePos = projection(d.from);
+                    if (sourcePos) {
+                        mainGroup.append("circle")
+                            .datum(d)
+                            .attr("class", "send-point")
+                            .attr("cx", sourcePos[0])
+                            .attr("cy", sourcePos[1])
+                            .attr("r", 5);
+                    }
+
+                    // Render pull destination green square
+                    const destPos = projection(d.to);
+                    if (destPos) {
+                        mainGroup.append("rect")
+                            .datum(d)
+                            .attr("class", "pull-square")
+                            .attr("x", destPos[0] - 5)
+                            .attr("y", destPos[1] - 5)
+                            .attr("width", 10)
+                            .attr("height", 10);
+                    }
+                }
+            });
+        }
+
+        // 5. INTERACTIVE ANTI-CLUTTER ZOOM HANDLING LAYER
+        const zoomBehavior = d3.zoom()
+            .scaleExtent([1, 40]) // Scale boundaries
+            .on("zoom", (event) => {
+                const { transform } = event;
+
+                // Transform the entire map graphic space dynamically
+                mainGroup.attr("transform", transform);
+
+                // Recalculate component visual scales inversely against zoom scale factor (transform.k)
+                mainGroup.selectAll(".send-point")
+                    .attr("r", 5 / transform.k)
+                    .attr("cx", d => projection(d.from)[0])
+                    .attr("cy", d => projection(d.from)[1]);
+
+                mainGroup.selectAll(".pull-square")
+                    .attr("width", 10 / transform.k)
+                    .attr("height", 10 / transform.k)
+                    .attr("x", d => projection(d.to)[0] - (5 / transform.k))
+                    .attr("y", d => projection(d.to)[1] - (5 / transform.k));
+
+                mainGroup.selectAll(".sync-line")
+.style("stroke-width", 2 / transform.k);
+
+// Handle composite Self-Sync scaling updatesmainGroup.selectAll(".self-sync-marker").attr("transform", d => {const pos = projection(d.coords);return translate(${pos[0]}, ${pos[1]});});
+
+mainGroup.selectAll(".self-sync-outline").attr("width", 12 / transform.k).attr("height", 12 / transform.k).attr("x", -6 / transform.k).attr("y", -6 / transform.k).style("stroke-width", 1.5 / transform.k);
+
+mainGroup.selectAll(".self-sync-center").attr("r", 3 / transform.k);
+
+// Mute map helper arrays so they remain elegant backgroundsmainGroup.selectAll(".graticule").style("stroke-width", 0.5 / transform.k);});
+svg.call(zoomBehavior);
