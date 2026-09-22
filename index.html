@@ -4,206 +4,209 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Real-Time Sync Map</title>
-    <!-- Stable production maps delivery modules via Cloudflare CDN -->
-    <script src="https://cloudflare.com"></script>
-    <script src="https://cloudflare.com"></script>
     <style>
         body {
             margin: 0;
-            background-color: #fcf8f2;
+            background-color: #fcf8f2; /* Soft beige linen base */
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             overflow: hidden;
         }
-        #map-container {
+        canvas {
+            display: block;
             width: 100vw;
             height: 100vh;
-            display: block;
         }
-        .ocean { fill: #e8ded1; }
-        .graticule { fill: none; stroke: #dfd0be; stroke-width: 0.75px; stroke-opacity: 0.7; }
-        .land-mass { fill: #f5ece1; stroke: #dfd3c3; stroke-width: 0.5px; }
-        .send-point { fill: #4AF626; filter: drop-shadow(0px 0px 4px rgba(74, 246, 38, 0.8)); }
-        .pull-square { fill: #3ce01b; filter: drop-shadow(0px 0px 4px rgba(74, 246, 38, 0.8)); }
-        .sync-line { fill: none; stroke: #4AF626; stroke-linecap: round; opacity: 0.95; }
-        .self-sync-outline { fill: none; stroke: #4AF626; stroke-width: 2px; }
-        .self-sync-center { fill: #4AF626; }
         #dashboard-ui {
             position: absolute;
             top: 20px;
             left: 20px;
-            background: rgba(252, 248, 242, 0.96);
+            background: rgba(252, 248, 242, 0.95);
             padding: 15px 20px;
             border-radius: 8px;
             box-shadow: 0 4px 24px rgba(0,0,0,0.06);
             border: 1px solid #dfd3c3;
             pointer-events: none;
-            z-index: 1000;
+            z-index: 10;
         }
-        h1 { margin: 0 0 4px 0; font-size: 14px; text-transform: uppercase; color: #5c4d3c; }
+        h1 { margin: 0 0 4px 0; font-size: 14px; text-transform: uppercase; color: #5c4d3c; letter-spacing: 1px;}
         .subtitle { font-size: 11px; color: #8c7b69; margin: 0; }
     </style>
 </head>
 <body>
+
     <div id="dashboard-ui">
         <h1>Global Latency Vector Map</h1>
         <p class="subtitle">Azimuthal Equidistant Projection • 1 Dash = 15 Mins</p>
     </div>
-    <svg id="map-container"></svg>
+
+    <canvas id="mapCanvas"></canvas>
+
     <script>
-                const width = window.innerWidth;
-        const height = window.innerHeight;
+        const canvas = document.getElementById('mapCanvas');
+        const ctx = canvas.getContext('2d');
 
-        const svg = d3.select("#map-container")
-            .attr("width", width)
-            .attr("height", height);
+        let width = canvas.width = window.innerWidth;
+        let height = canvas.height = window.innerHeight;
 
-        const mainGroup = svg.append("g");
+        // Map state configuration parameters
+        let zoomScale = 1.0;
+        let offsetX = 0;
+        let offsetY = 0;
+        let isDragging = false;
+        let startX, startY;
 
-        // Set up the Azimuthal Equidistant Projection
-        const projection = d3.geoAzimuthalEquidistant()
-            .scale(Math.min(width, height) * 0.35)
-            .translate([width / 2, height / 2])
-            .center([0, 0])
-            .clipAngle(180 - 1e-3);
-
-        const pathGenerator = d3.geoPath().projection(projection);
-
-        // Draw background elements
-        mainGroup.append("path")
-            .datum({type: "Sphere"})
-            .attr("class", "ocean")
-            .attr("d", pathGenerator);
-
-        mainGroup.append("path")
-            .datum(d3.geoGraticule().step([30, 30]))
-            .attr("class", "graticule")
-            .attr("d", pathGenerator);
-
-        // Simulated Sync Data Pipeline Array (No missing indices or empty trailing commas)
-        const activeSyncs = [
-            { id: 1, type: "transit", from: [-87.6298, 41.8781], to: [-0.1276, 51.5074], mins: 120 },  // Chicago -> London
-            { id: 2, type: "transit", from: [139.6503, 35.6762], to: [121.5654, 25.0330], mins: 45 },   // Tokyo -> Taipei
-            { id: 3, type: "transit", from: [12.4964, 41.9028], to: [37.6173, 55.7558], mins: 330 },    // Rome -> Moscow
-            { id: 4, type: "self", coords: [-122.4194, 37.7749] }                                       // SF Self Sync
+        // Custom local dataset matrices (Lat, Lon)
+        const syncData = [
+            { from: [41.8781, -87.6298], to: [51.5074, -0.1276], mins: 120, label: "Chicago -> London" }, 
+            { from: [35.6762, 139.6503], to: [25.0330, 121.5654], mins: 45, label: "Tokyo -> Taipei" },
+            { from: [41.9028, 12.4964], to: [55.7558, 37.6173], mins: 330, label: "Rome -> Moscow" },
+            { isSelf: true, coords: [37.7749, -122.4194], label: "SF Router Self-Sync" }
         ];
 
-        // Fetch low-overhead geographic topo data from jsDelivr production mirrors
-        d3.json("https://jsdelivr.net")
-            .then(worldData => {
-                mainGroup.append("g")
-                    .selectAll("path")
-                    .data(topojson.feature(worldData, worldData.objects.land).features)
-                    .enter().append("path")
-                    .attr("class", "land-mass")
-                    .attr("d", pathGenerator);
+        // 1. BUILT-IN AZIMUTHAL EQUIDISTANT MATH PROJECTION ENGINE
+        // Transforms raw spherical coordinates straight into flat pixel vectors natively
+        function project(lat, lon) {
+            const rLat = lat * Math.PI / 180;
+            const rLon = lon * Math.PI / 180;
+            
+            // Map configuration center alignment axes (0, 0)
+            const cLat = 0;
+            const cLon = 0;
 
-                renderDataLayers(activeSyncs);
-            })
-            .catch(err => {
-                console.warn("Using standalone grid mode due to network loading variance:", err);
-                renderDataLayers(activeSyncs);
-            });
+            const cosC = Math.sin(cLat) * Math.sin(rLat) + Math.cos(cLat) * Math.cos(rLat) * Math.cos(rLon - cLon);
+            const c = Math.acos(Math.max(-1, Math.min(1, cosC)));
+            
+            if (c === 0) return { x: 0, y: 0 };
 
-        function renderDataLayers(data) {
-            data.forEach(d => {
-                if (d.type === "self") {
-                    const screenPos = projection(d.coords);
-                    if (!screenPos) return;
+            const k = c / Math.sin(c);
+            const x = k * Math.cos(rLat) * Math.sin(rLon - cLon);
+            const y = k * (Math.cos(cLat) * Math.sin(rLat) - Math.sin(cLat) * Math.cos(rLat) * Math.cos(rLon - cLon));
 
-                    const markerGroup = mainGroup.append("g")
-                        .attr("class", "self-sync-marker")
-                        .datum(d)
-                        .attr("transform", "translate(" + screenPos[0] + "," + screenPos[1] + ")");
+            const mapRadius = Math.min(width, height) * 0.28;
+            return {
+                x: (x * mapRadius * zoomScale) + (width / 2) + offsetX,
+                y: (-y * mapRadius * zoomScale) + (height / 2) + offsetY
+            };
+        }
 
-                    markerGroup.append("rect")
-                        .attr("class", "self-sync-outline")
-                        .attr("width", 12)
-                        .attr("height", 12)
-                        .attr("x", -6)
-                        .attr("y", -6);
+        // 2. RENDERING PIPELINE ENGINE
+        function drawMap() {
+            ctx.fillStyle = "#fcf8f2";
+            ctx.fillRect(0, 0, width, height);
 
-                    markerGroup.append("circle")
-                        .attr("class", "self-sync-center")
-                        .attr("r", 3);
+            const center = project(0, 0);
+            const maxRadius = Math.min(width, height) * 0.85 * zoomScale;
+
+            // Render oceanic baseline container
+            ctx.beginPath();
+            ctx.arc(center.x, center.y, maxRadius, 0, 2 * Math.PI);
+            ctx.fillStyle = "#e8ded1";
+            ctx.fill();
+            ctx.strokeStyle = "#dfd3c3";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Draw azimuthal concentric grid matrices
+            ctx.strokeStyle = "rgba(223, 208, 190, 0.6)";
+            ctx.lineWidth = 1;
+            for (let r = maxRadius / 6; r <= maxRadius; r += maxRadius / 6) {
+                ctx.beginPath();
+                ctx.arc(center.x, center.y, r, 0, 2 * Math.PI);
+                ctx.stroke();
+            }
+
+            // Draw layout rays extending outward from core center
+            for (let a = 0; a < 360; a += 30) {
+                const rad = a * Math.PI / 180;
+                ctx.beginPath();
+                ctx.moveTo(center.x, center.y);
+                ctx.lineTo(center.x + Math.cos(rad) * maxRadius, center.y + Math.sin(rad) * maxRadius);
+                ctx.stroke();
+            }
+
+            // 3. TELEMETRY RENDER OVERLAY LAYER
+            syncData.forEach(d => {
+                if (d.isSelf) {
+                    const pos = project(d.coords[0], d.coords[1]);
+                    
+                    // Render "Self-Sync" structural layout emblem (Square outline + inner green dot)
+                    ctx.strokeStyle = "#4AF626";
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(pos.x - 7, pos.y - 7, 14, 14);
+
+                    ctx.beginPath();
+                    ctx.arc(pos.x, pos.y, 3, 0, 2 * Math.PI);
+                    ctx.fillStyle = "#4AF626";
+                    ctx.fill();
                 } else {
-                    const geoLine = { type: "LineString", coordinates: [d.from, d.to] };
+                    const start = project(d.from[0], d.from[1]);
+                    const end = project(d.to[0], d.to[1]);
 
-                    const path = mainGroup.append("path")
-                        .datum(geoLine)
-                        .attr("class", "sync-line")
-                        .attr("d", pathGenerator);
+                    // Render dynamic dash segmentation (1 segment / break link entry per 15 minutes)
+                    ctx.beginPath();
+                    ctx.moveTo(start.x, start.y);
+                    ctx.lineTo(end.x, end.y);
+                    
+                    const dx = end.x - start.x;
+                    const dy = end.y - start.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    const intervalsCount = Math.max(1, Math.floor(d.mins / 15));
+                    const chunkUnit = distance / intervalsCount;
+                    
+                    ctx.strokeStyle = "#4AF626";
+                    ctx.lineWidth = 2.5;
+                    ctx.setLineDash([chunkUnit * 0.75, chunkUnit * 0.25]);
+                    ctx.stroke();
+                    ctx.setLineDash([]); // Flush trace array parameters immediately
 
-                    if (path.node()) {
-                        const totalLength = path.node().getTotalLength();
-                        const segmentsCount = Math.max(1, Math.floor(d.mins / 15));
-                        const chunk = totalLength / segmentsCount;
-                        path.style("stroke-dasharray", (chunk * 0.7) + ", " + (chunk * 0.3));
-                    }
+                    // Render sender node point (Soft green circle)
+                    ctx.beginPath();
+                    ctx.arc(start.x, start.y, 5, 0, 2 * Math.PI);
+                    ctx.fillStyle = "#4AF626";
+                    ctx.fill();
 
-                    const sourcePos = projection(d.from);
-                    if (sourcePos) {
-                        mainGroup.append("circle")
-                            .datum(d)
-                            .attr("class", "send-point")
-                            .attr("cx", sourcePos[0])
-                            .attr("cy", sourcePos[1])
-                            .attr("r", 5);
-                    }
-
-                    const destPos = projection(d.to);
-                    if (destPos) {
-                        mainGroup.append("rect")
-                            .datum(d)
-                            .attr("class", "pull-square")
-                            .attr("x", destPos[0] - 5)
-                            .attr("y", destPos[1] - 5)
-                            .attr("width", 10)
-                            .attr("height", 10);
-                    }
+                    // Render receiver pull target node (Solid green block)
+                    ctx.fillStyle = "#3ce01b";
+                    ctx.fillRect(end.x - 5, end.y - 5, 10, 10);
                 }
             });
         }
 
-        // Adaptive zoom matrix management handling
-        const zoomBehavior = d3.zoom()
-            .scaleExtent([0.5, 20])
-            .on("zoom", (event) => {
-                const transform = event.transform;
-                mainGroup.attr("transform", transform);
+        // 4. MOUSE & MULTI-TOUCH INTERACTIVE LISTENERS
+        window.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            startX = e.clientX - offsetX;
+            startY = e.clientY - offsetY;
+        });
 
-                mainGroup.selectAll(".send-point")
-                    .attr("r", 5 / transform.k)
-                    .attr("cx", d => projection(d.from)[0])
-                    .attr("cy", d => projection(d.from)[1]);
+        window.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            offsetX = e.clientX - startX;
+            offsetY = e.clientY - startY;
+            drawMap();
+        });
 
-                mainGroup.selectAll(".pull-square")
-                    .attr("width", 10 / transform.k)
-                    .attr("height", 10 / transform.k)
-                    .attr("x", d => projection(d.to)[0] - (5 / transform.k))
-                    .attr("y", d => projection(d.to)[1] - (5 / transform.k));
+        window.addEventListener('mouseup', () => isDragging = false);
 
-                mainGroup.selectAll(".sync-line").style("stroke-width", 2 / transform.k);
+        window.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            if (e.deltaY < 0) {
+                zoomScale = Math.min(zoomScale * 1.1, 15.0);
+            } else {
+                zoomScale = Math.max(zoomScale / 1.1, 0.5);
+            }
+            drawMap();
+        }, { passive: false });
 
-                mainGroup.selectAll(".self-sync-marker")
-                    .attr("transform", d => {
-                        const pos = projection(d.coords);
-                        return "translate(" + pos[0] + "," + pos[1] + ")";
-                    });
+        window.addEventListener('resize', () => {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            drawMap();
+        });
 
-                mainGroup.selectAll(".self-sync-outline")
-                    .attr("width", 12 / transform.k)
-                    .attr("height", 12 / transform.k)
-                    .attr("x", -6 / transform.k)
-                    .attr("y", -6 / transform.k)
-                    .style("stroke-width", 1.5 / transform.k);
-
-                mainGroup.selectAll(".self-sync-center").attr("r", 3 / transform.k);
-                mainGroup.selectAll(".graticule").style("stroke-width", 0.75 / transform.k);
-                mainGroup.selectAll(".land-mass").style("stroke-width", 0.5 / transform.k);
-            });
-
-        svg.call(zoomBehavior);
-
+        // Bootstrap visual runtime loop execution configuration
+        drawMap();
     </script>
 </body>
 </html>
