@@ -4,8 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Real-Time Sync Map</title>
-    <script src="https://jsdelivr.net"></script>
-    <script src="https://jsdelivr.net"></script>
+    <!-- Stable production maps delivery modules via Cloudflare CDN -->
+    <script src="https://cloudflare.com"></script>
+    <script src="https://cloudflare.com"></script>
     <style>
         body {
             margin: 0;
@@ -16,82 +17,40 @@
         #map-container {
             width: 100vw;
             height: 100vh;
-            cursor: grab;
+            display: block;
         }
-        #map-container:active {
-            cursor: grabbing;
-        }
-        .ocean {
-            fill: #e8ded1;
-        }
-        .graticule {
-            fill: none;
-            stroke: #dfd0be;
-            stroke-width: 0.5px;
-            stroke-opacity: 0.6;
-        }
-        .land-mass {
-            fill: #f5ece1;
-            stroke: #dfd3c3;
-            stroke-width: 0.5px;
-        }
-        .send-point {
-            fill: #4AF626;
-        }
-        .pull-square {
-            fill: #3ce01b;
-        }
-        .sync-line {
-            fill: none;
-            stroke: #4AF626;
-            stroke-linecap: round;
-            opacity: 0.9;
-        }
-        .self-sync-outline {
-            fill: none;
-            stroke: #4AF626;
-            stroke-width: 1.5px;
-        }
-        .self-sync-center {
-            fill: #4AF626;
-        }
+        .ocean { fill: #e8ded1; }
+        .graticule { fill: none; stroke: #dfd0be; stroke-width: 0.75px; stroke-opacity: 0.7; }
+        .land-mass { fill: #f5ece1; stroke: #dfd3c3; stroke-width: 0.5px; }
+        .send-point { fill: #4AF626; filter: drop-shadow(0px 0px 4px rgba(74, 246, 38, 0.8)); }
+        .pull-square { fill: #3ce01b; filter: drop-shadow(0px 0px 4px rgba(74, 246, 38, 0.8)); }
+        .sync-line { fill: none; stroke: #4AF626; stroke-linecap: round; opacity: 0.95; }
+        .self-sync-outline { fill: none; stroke: #4AF626; stroke-width: 2px; }
+        .self-sync-center { fill: #4AF626; }
         #dashboard-ui {
             position: absolute;
             top: 20px;
             left: 20px;
-            background: rgba(252, 248, 242, 0.95);
+            background: rgba(252, 248, 242, 0.96);
             padding: 15px 20px;
             border-radius: 8px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+            box-shadow: 0 4px 24px rgba(0,0,0,0.06);
             border: 1px solid #dfd3c3;
             pointer-events: none;
-            z-index: 100;
+            z-index: 1000;
         }
-        h1 {
-            margin: 0 0 5px 0;
-            font-size: 15px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            color: #5c4d3c;
-        }
-        .subtitle {
-            font-size: 11px;
-            color: #8c7b69;
-            margin: 0;
-        }
+        h1 { margin: 0 0 4px 0; font-size: 14px; text-transform: uppercase; color: #5c4d3c; }
+        .subtitle { font-size: 11px; color: #8c7b69; margin: 0; }
     </style>
 </head>
 <body>
-
     <div id="dashboard-ui">
         <h1>Global Latency Vector Map</h1>
         <p class="subtitle">Azimuthal Equidistant Projection • 1 Dash = 15 Mins</p>
     </div>
-
     <svg id="map-container"></svg>
-
     <script>
-        const width = window.innerWidth;
+                const width = window.innerWidth;
         const height = window.innerHeight;
 
         const svg = d3.select("#map-container")
@@ -100,47 +59,50 @@
 
         const mainGroup = svg.append("g");
 
-        // Center map projection near the center of the world view [Longitude, Latitude]
+        // Set up the Azimuthal Equidistant Projection
         const projection = d3.geoAzimuthalEquidistant()
             .scale(Math.min(width, height) * 0.35)
             .translate([width / 2, height / 2])
-            .center([0, 20])
+            .center([0, 0])
             .clipAngle(180 - 1e-3);
 
         const pathGenerator = d3.geoPath().projection(projection);
 
-        // Add background ocean bounding sphere
+        // Draw background elements
         mainGroup.append("path")
             .datum({type: "Sphere"})
             .attr("class", "ocean")
             .attr("d", pathGenerator);
 
-        // Add longitude and latitude gridline layers
         mainGroup.append("path")
-            .datum(d3.geoGraticule().step([20, 20]))
+            .datum(d3.geoGraticule().step([30, 30]))
             .attr("class", "graticule")
             .attr("d", pathGenerator);
 
-        // Fetch official high-performance map geometries
-        d3.json("https://jsdelivr.net").then(worldData => {
-            
-            mainGroup.append("g")
-                .selectAll("path")
-                .data(topojson.feature(worldData, worldData.objects.land).features)
-                .enter().append("path")
-                .attr("class", "land-mass")
-                .attr("d", pathGenerator);
+        // Simulated Sync Data Pipeline Array (No missing indices or empty trailing commas)
+        const activeSyncs = [
+            { id: 1, type: "transit", from: [-87.6298, 41.8781], to: [-0.1276, 51.5074], mins: 120 },  // Chicago -> London
+            { id: 2, type: "transit", from: [139.6503, 35.6762], to: [121.5654, 25.0330], mins: 45 },   // Tokyo -> Taipei
+            { id: 3, type: "transit", from: [12.4964, 41.9028], to: [37.6173, 55.7558], mins: 330 },    // Rome -> Moscow
+            { id: 4, type: "self", coords: [-122.4194, 37.7749] }                                       // SF Self Sync
+        ];
 
-            // Simulation sync entries data pipeline array
-            const activeSyncs = [
-                { id: 1, type: "transit", from: [-87.6298, 41.8781], to: [-0.1276, 51.5074], mins: 120 }, 
-                { id: 2, type: "transit", from: [139.6917, 35.6895], to: [121.5654, 25.0330], mins: 30 },  
-                { id: 3, type: "transit", from: [12.4964, 41.9028], to: [37.6173, 55.7558], mins: 315 },  
-                { id: 4, type: "self", coords: [-122.4194, 37.7749] }
-            ];
+        // Fetch low-overhead geographic topo data from jsDelivr production mirrors
+        d3.json("https://jsdelivr.net")
+            .then(worldData => {
+                mainGroup.append("g")
+                    .selectAll("path")
+                    .data(topojson.feature(worldData, worldData.objects.land).features)
+                    .enter().append("path")
+                    .attr("class", "land-mass")
+                    .attr("d", pathGenerator);
 
-            renderDataLayers(activeSyncs);
-        }).catch(err => console.error("Error configuration parsing geographic data sets:", err));
+                renderDataLayers(activeSyncs);
+            })
+            .catch(err => {
+                console.warn("Using standalone grid mode due to network loading variance:", err);
+                renderDataLayers(activeSyncs);
+            });
 
         function renderDataLayers(data) {
             data.forEach(d => {
@@ -163,12 +125,8 @@
                     markerGroup.append("circle")
                         .attr("class", "self-sync-center")
                         .attr("r", 3);
-
                 } else {
-                    const geoLine = {
-                        type: "LineString",
-                        coordinates: [d.from, d.to]
-                    };
+                    const geoLine = { type: "LineString", coordinates: [d.from, d.to] };
 
                     const path = mainGroup.append("path")
                         .datum(geoLine)
@@ -179,9 +137,7 @@
                         const totalLength = path.node().getTotalLength();
                         const segmentsCount = Math.max(1, Math.floor(d.mins / 15));
                         const chunk = totalLength / segmentsCount;
-                        const dash = chunk * 0.70;
-                        const gap = chunk * 0.30;
-                        path.style("stroke-dasharray", dash + ", " + gap);
+                        path.style("stroke-dasharray", (chunk * 0.7) + ", " + (chunk * 0.3));
                     }
 
                     const sourcePos = projection(d.from);
@@ -208,9 +164,9 @@
             });
         }
 
-        // Handle panning and multi-touch zoom transformations
+        // Adaptive zoom matrix management handling
         const zoomBehavior = d3.zoom()
-            .scaleExtent([1, 20])
+            .scaleExtent([0.5, 20])
             .on("zoom", (event) => {
                 const transform = event.transform;
                 mainGroup.attr("transform", transform);
@@ -226,8 +182,7 @@
                     .attr("x", d => projection(d.to)[0] - (5 / transform.k))
                     .attr("y", d => projection(d.to)[1] - (5 / transform.k));
 
-                mainGroup.selectAll(".sync-line")
-                    .style("stroke-width", 2 / transform.k);
+                mainGroup.selectAll(".sync-line").style("stroke-width", 2 / transform.k);
 
                 mainGroup.selectAll(".self-sync-marker")
                     .attr("transform", d => {
@@ -242,17 +197,13 @@
                     .attr("y", -6 / transform.k)
                     .style("stroke-width", 1.5 / transform.k);
 
-                mainGroup.selectAll(".self-sync-center")
-                    .attr("r", 3 / transform.k);
-
-                mainGroup.selectAll(".graticule")
-                    .style("stroke-width", 0.5 / transform.k);
-
-                mainGroup.selectAll(".land-mass")
-                    .style("stroke-width", 0.5 / transform.k);
+                mainGroup.selectAll(".self-sync-center").attr("r", 3 / transform.k);
+                mainGroup.selectAll(".graticule").style("stroke-width", 0.75 / transform.k);
+                mainGroup.selectAll(".land-mass").style("stroke-width", 0.5 / transform.k);
             });
 
         svg.call(zoomBehavior);
+
     </script>
 </body>
 </html>
